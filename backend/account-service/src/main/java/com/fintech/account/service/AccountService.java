@@ -2,6 +2,7 @@ package com.fintech.account.service;
 
 import com.fintech.account.client.TransactionClient;
 import com.fintech.account.dto.AccountResponse;
+import com.fintech.account.dto.AccountStatusUpdateRequest;
 import com.fintech.account.dto.AmountRequest;
 import com.fintech.account.dto.OpenAccountRequest;
 import com.fintech.account.dto.TransferRequest;
@@ -80,6 +81,8 @@ public class AccountService {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
 
+        validateAccountActive(account);
+
         account.setBalance(account.getBalance().add(request.getAmount()));
         Account saved = accountRepository.save(account);
 
@@ -94,6 +97,8 @@ public class AccountService {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
 
+        validateAccountActive(account);
+
         if (account.getBalance().compareTo(request.getAmount()) < 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Insufficient funds for this withdrawal");
         }
@@ -107,6 +112,31 @@ public class AccountService {
         return AccountResponse.from(saved);
     }
 
+    private void validateAccountActive(Account account) {
+        if (Account.STATUS_CLOSED.equalsIgnoreCase(account.getStatus())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Transactions are not allowed on closed accounts");
+        }
+    }
+
+    @Transactional
+    public AccountResponse updateStatus(Long userId, Long accountId, AccountStatusUpdateRequest request) {
+        Account account = accountRepository.findByIdAndUserId(accountId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+
+        String newStatus = request.getStatus().toUpperCase();
+        if (!newStatus.equals(Account.STATUS_ACTIVE) && !newStatus.equals(Account.STATUS_CLOSED)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Account status must be one of ACTIVE or CLOSED");
+        }
+
+        if (newStatus.equals(Account.STATUS_ACTIVE) && account.getStatus().equals(Account.STATUS_CLOSED)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Closed accounts cannot be reopened");
+        }
+
+        account.setStatus(newStatus);
+        return AccountResponse.from(accountRepository.save(account));
+    }
+
     @Transactional
     public TransferResponse transfer(Long userId, String authHeader, TransferRequest request) {
         if (request.getFromAccountId().equals(request.getToAccountId())) {
@@ -117,6 +147,9 @@ public class AccountService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Source account not found"));
         Account destination = accountRepository.findByIdAndUserId(request.getToAccountId(), userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Destination account not found"));
+
+        validateAccountActive(source);
+        validateAccountActive(destination);
 
         if (source.getBalance().compareTo(request.getAmount()) < 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Insufficient funds in source account");

@@ -147,6 +147,9 @@ body {
 .btn-ghost { background: transparent; color: var(--secondary); border-color: var(--border); }
 .btn-ghost:hover:not(:disabled) { background: #f1f5f9; }
 
+.btn-danger { background: var(--error); color: #fff; }
+.btn-danger:hover:not(:disabled) { background: #9f1026; }
+
 .btn-block { width: 100%; }
 
 /* ---------- Forms ---------- */
@@ -277,6 +280,7 @@ body {
 .badge-savings { background: #e0f2fe; color: #0369a1; }
 .badge-checking { background: #ecfdf5; color: #047857; }
 .badge-current { background: #fef3c7; color: #b45309; }
+.badge-closed { background: #fee2e2; color: var(--error); margin-left: 8px; }
 
 /* ---------- Detail page ---------- */
 .back-link { display: inline-block; color: var(--primary); text-decoration: none; font-weight: 600; margin-bottom: 16px; font-size: 14px; }

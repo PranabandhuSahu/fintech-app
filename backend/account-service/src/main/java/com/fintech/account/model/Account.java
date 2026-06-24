@@ -33,8 +33,11 @@ public class Account {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal balance = BigDecimal.ZERO;
 
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_CLOSED = "CLOSED";
+
     @Column(nullable = false)
-    private String status = "ACTIVE";
+    private String status = STATUS_ACTIVE;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

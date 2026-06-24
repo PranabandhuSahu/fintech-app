@@ -49,4 +49,10 @@ apiClient.interceptors.response.use(
   }
 )
 
+export const closeAccount = (accountId, destinationAccountId) =>
+  apiClient.post('/api/close-account', {
+    accountId,
+    destinationAccountId
+  })
+
 export default apiClient

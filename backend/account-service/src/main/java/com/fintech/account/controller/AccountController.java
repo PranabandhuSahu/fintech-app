@@ -1,6 +1,7 @@
 package com.fintech.account.controller;
 
 import com.fintech.account.dto.AccountResponse;
+import com.fintech.account.dto.AccountStatusUpdateRequest;
 import com.fintech.account.dto.AmountRequest;
 import com.fintech.account.dto.OpenAccountRequest;
 import com.fintech.account.dto.TransferRequest;
@@ -78,5 +79,13 @@ public class AccountController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
             @Valid @RequestBody TransferRequest request) {
         return ResponseEntity.ok(accountService.transfer(principal.getUserId(), authHeader, request));
+    }
+
+    @PostMapping("/{id}/status")
+    public ResponseEntity<AccountResponse> updateStatus(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long id,
+            @Valid @RequestBody AccountStatusUpdateRequest request) {
+        return ResponseEntity.ok(accountService.updateStatus(principal.getUserId(), id, request));
     }
 }

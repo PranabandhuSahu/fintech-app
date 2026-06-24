@@ -8,6 +8,7 @@ import java.time.Instant;
 public class AccountResponse {
 
     private Long id;
+    private Long userId;
     private String accountNumber;
     private String holderName;
     private String accountType;
@@ -18,6 +19,7 @@ public class AccountResponse {
     public static AccountResponse from(Account account) {
         AccountResponse r = new AccountResponse();
         r.id = account.getId();
+        r.userId = account.getUserId();
         r.accountNumber = account.getAccountNumber();
         r.holderName = account.getHolderName();
         r.accountType = account.getAccountType();
@@ -29,6 +31,10 @@ public class AccountResponse {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getAccountNumber() {

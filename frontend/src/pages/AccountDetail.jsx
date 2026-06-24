@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import apiClient from '../api/client.js'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import apiClient, { closeAccount } from '../api/client.js'
 import { useToast } from '../context/ToastContext.jsx'
 import { formatCurrency, formatDateTime } from '../utils/format.js'
 
 export default function AccountDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const toast = useToast()
 
   const [account, setAccount] = useState(null)
+  const [accounts, setAccounts] = useState([])
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [action, setAction] = useState(null)
@@ -18,6 +20,12 @@ export default function AccountDetail() {
   const [submitting, setSubmitting] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [showTransferPopup, setShowTransferPopup] = useState(false)
+  const [destinationAccountId, setDestinationAccountId] = useState('')
+  const [closeSubmitting, setCloseSubmitting] = useState(false)
+
+  const isClosed = account?.status === 'CLOSED'
 
   const loadData = async (fromDate, toDate) => {
     setLoading(true)
@@ -25,12 +33,14 @@ export default function AccountDetail() {
       let txUrl = `/api/transactions?accountId=${id}`
       if (fromDate) txUrl += `&from=${fromDate}`
       if (toDate) txUrl += `&to=${toDate}`
-      const [accRes, txRes] = await Promise.all([
+      const [accRes, txRes, accountsRes] = await Promise.all([
         apiClient.get(`/api/accounts/${id}`),
-        apiClient.get(txUrl)
+        apiClient.get(txUrl),
+        apiClient.get('/api/accounts')
       ])
       setAccount(accRes.data)
       setTransactions(txRes.data)
+      setAccounts(accountsRes.data.filter((a) => String(a.id) !== id && a.status === 'ACTIVE'))
     } catch (err) {
       toast.error(err.userMessage)
     } finally {
@@ -85,6 +95,61 @@ export default function AccountDetail() {
     }
   }
 
+  const handleCloseClick = () => {
+    if (isClosed) {
+      toast.error('This account is already closed')
+      return
+    }
+    if (Number(account.balance) > 0) {
+      if (accounts.length === 0) {
+        toast.error('Open another account first to receive the remaining balance')
+        return
+      }
+      setDestinationAccountId(String(accounts[0].id))
+      setShowTransferPopup(true)
+    } else if (Number(account.balance) < 0) {
+      toast.error('Account has a negative balance. Deposit sufficient funds before closing.')
+    } else {
+      setShowCloseConfirm(true)
+    }
+  }
+
+  const handleCloseConfirm = async () => {
+    setCloseSubmitting(true)
+    try {
+      await closeAccount(Number(id), null)
+      toast.success('Account closed successfully')
+      setShowCloseConfirm(false)
+      navigate('/dashboard')
+    } catch (err) {
+      toast.error(err.userMessage)
+    } finally {
+      setCloseSubmitting(false)
+    }
+  }
+
+  const handleTransferAndClose = async (e) => {
+    e.preventDefault()
+    if (!destinationAccountId) {
+      toast.error('Select a destination account')
+      return
+    }
+    setCloseSubmitting(true)
+    try {
+      await closeAccount(Number(id), Number(destinationAccountId))
+      toast.success('Account closed and balance transferred successfully')
+      setShowTransferPopup(false)
+      navigate('/dashboard')
+    } catch (err) {
+      toast.error(err.userMessage)
+    } finally {
+      setCloseSubmitting(false)
+    }
+  }
+
+  const accountLabel = (a) =>
+    `${a.accountType} ••${a.accountNumber.slice(-4)} — ${formatCurrency(a.balance)}`
+
   if (loading && !account) {
     return <div className="page"><div className="card empty-state"><div className="spinner" /></div></div>
   }
@@ -113,6 +178,7 @@ export default function AccountDetail() {
       <section className="card detail-header">
         <div>
           <span className={`badge badge-${account.accountType.toLowerCase()}`}>{account.accountType}</span>
+          {isClosed && <span className="badge badge-closed">CLOSED</span>}
           <p className="detail-number">Account No. {account.accountNumber}</p>
           <p className="detail-holder">{account.holderName}</p>
         </div>
@@ -137,10 +203,13 @@ export default function AccountDetail() {
         </div>
       </section>
 
-      <section className="action-bar">
-        <button className="btn btn-primary" onClick={() => startAction('deposit')}>Deposit</button>
-        <button className="btn btn-secondary" onClick={() => startAction('withdraw')}>Withdraw</button>
-      </section>
+      {!isClosed && (
+        <section className="action-bar">
+          <button className="btn btn-primary" onClick={() => startAction('deposit')}>Deposit</button>
+          <button className="btn btn-secondary" onClick={() => startAction('withdraw')}>Withdraw</button>
+          <button className="btn btn-danger" onClick={handleCloseClick}>Close Account</button>
+        </section>
+      )}
 
       {action && (
         <section className="card form-card">
@@ -178,6 +247,51 @@ export default function AccountDetail() {
                 {submitting ? 'Processing…' : `Confirm ${action}`}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => setAction(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {showCloseConfirm && (
+        <section className="card form-card">
+          <h2 className="card-title">Close account</h2>
+          <p>Are you sure you want to close this account? This action cannot be undone.</p>
+          <div className="form-actions">
+            <button className="btn btn-danger" onClick={handleCloseConfirm} disabled={closeSubmitting}>
+              {closeSubmitting ? 'Closing…' : 'Yes, close account'}
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowCloseConfirm(false)}>
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
+
+      {showTransferPopup && (
+        <section className="card form-card">
+          <h2 className="card-title">Transfer balance before closing</h2>
+          <p>This account has a balance of {formatCurrency(account.balance)}. Select another account to receive the funds.</p>
+          <form onSubmit={handleTransferAndClose} noValidate>
+            <div className="form-group">
+              <label htmlFor="destinationAccount">Destination account</label>
+              <select
+                id="destinationAccount"
+                value={destinationAccountId}
+                onChange={(e) => setDestinationAccountId(e.target.value)}
+              >
+                <option value="">Select destination account</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{accountLabel(a)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn btn-danger" disabled={closeSubmitting}>
+                {closeSubmitting ? 'Closing…' : 'Transfer and close account'}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowTransferPopup(false)}>
                 Cancel
               </button>
             </div>

@@ -20,11 +20,11 @@ Extras: deposit & withdrawal with overdraft protection, client- and server-side 
    React (Vite) :5173 ──►│  API Gateway :8080   │  (Spring Cloud Gateway + CORS)
                          └──────────┬──────────┘
                                     │  routes via Eureka (lb://)
-        ┌───────────────┬──────────┼─────────────────┐
-        ▼               ▼          ▼                  ▼
- auth-service     account-service   transaction-service   discovery-server
-   :8081             :8082               :8083              :8761 (Eureka)
-   (H2 authdb)     (H2 accountdb)      (H2 transactiondb)
+        ┌──────────────┬──────────┬─┼────────────┬─────────────────┐
+        ▼              ▼          ▼ ▼            ▼                 ▼
+ auth-service   account-service  close-account-service  transaction-service  discovery-server
+   :8081           :8082               :8084                :8083              :8761 (Eureka)
+   (H2 authdb)  (H2 accountdb)   (H2 closeaccountdb)  (H2 transactiondb)
 ```
 
 - **discovery-server** — Netflix Eureka service registry.
@@ -32,6 +32,7 @@ Extras: deposit & withdrawal with overdraft protection, client- and server-side 
 - **auth-service** — registration, login, JWT issuance (BCrypt password hashing).
 - **account-service** — account opening, balances, deposit/withdraw; records ledger entries in transaction-service (inter-service call forwarding the user's JWT).
 - **transaction-service** — transaction ledger and history.
+- **close-account-service** — orchestrates account closure, balance transfer, and closure audit (port `8084`).
 
 Each business service owns its **own H2 in-memory database** (database-per-service). All services validate the JWT issued by auth-service using a shared secret.
 
@@ -69,6 +70,7 @@ Start them (each in its own terminal), **starting with the discovery server**:
 java -jar discovery-server/target/discovery-server-1.0.0.jar
 java -jar auth-service/target/auth-service-1.0.0.jar
 java -jar account-service/target/account-service-1.0.0.jar
+java -jar close-account-service/target/close-account-service-1.0.0.jar
 java -jar transaction-service/target/transaction-service-1.0.0.jar
 java -jar api-gateway/target/api-gateway-1.0.0.jar
 ```
@@ -76,7 +78,7 @@ java -jar api-gateway/target/api-gateway-1.0.0.jar
 Or use the helper scripts from the project root:
 
 ```bash
-./run-all.sh     # starts all 5 services in the background (logs in ./logs)
+./run-all.sh     # starts all 6 services in the background (logs in ./logs)
 ./stop-all.sh    # stops them
 ```
 
@@ -121,6 +123,7 @@ Each service exposes an H2 console (the service must be reached directly, not vi
 
 - auth-service: http://localhost:8081/h2-console (JDBC URL `jdbc:h2:mem:authdb`)
 - account-service: http://localhost:8082/h2-console (JDBC URL `jdbc:h2:mem:accountdb`)
+- close-account-service: http://localhost:8084/h2-console (JDBC URL `jdbc:h2:mem:closeaccountdb`)
 - transaction-service: http://localhost:8083/h2-console (JDBC URL `jdbc:h2:mem:transactiondb`)
 
 User: `sa`, empty password.
@@ -135,6 +138,7 @@ fintech-app/
 │   ├── api-gateway/
 │   ├── auth-service/
 │   ├── account-service/
+│   ├── close-account-service/
 │   └── transaction-service/
 ├── frontend/
 │   ├── src/
